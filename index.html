@@ -1,0 +1,301 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"></head><body><title>Logik-Werkbank</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600;700&family=IBM+Plex+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: Werkzeugleiste oben, darunter eine große Arbeitsfläche (Schaltplan im Rastermaß), Ergebniszeile unten */
+:root {
+  --bg: #eef2f6; --panel: #ffffff; --fg: #18222e; --muted: #5b6878; --grid: #d8e0e9;
+  --line: #2a3644; --off: #8d99a8; --on: #e8a317; --onglow: #ffd36b; --accent: #1f5f99; --danger: #c0392b;
+  --font: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif; --mono: "IBM Plex Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #121820; --panel: #1b2430; --fg: #e6edf4; --muted: #9aa8b8; --grid: #26313e;
+  --line: #c9d4e0; --off: #5f6c7b; --on: #f5b52e; --onglow: #ffcf5c; --accent: #6fa8e0; --danger: #ef6f60; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #121820; --panel: #1b2430; --fg: #e6edf4; --muted: #9aa8b8; --grid: #26313e;
+  --line: #c9d4e0; --off: #5f6c7b; --on: #f5b52e; --onglow: #ffcf5c; --accent: #6fa8e0; --danger: #ef6f60; color-scheme: dark }
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--fg); font-family: var(--font); font-size: 15px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 12px;
+  display: flex; flex-direction: column; gap: 10px; box-sizing: border-box; -webkit-user-select: none; user-select: none; }
+header { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+h1 { margin: 0; font-size: 22px; letter-spacing: .01em; text-wrap: balance; }
+h1 span { font-family: var(--mono); color: var(--accent); }
+.hint { color: var(--muted); font-size: 13px; min-width: 0; }
+.bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.group { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; background: var(--panel); border: 1px solid var(--grid); border-radius: 10px; padding: 6px 8px; }
+.group b { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-right: 2px; }
+button { font: 600 14px var(--font); color: var(--fg); background: var(--bg); border: 1.5px solid var(--grid); border-radius: 8px; padding: 7px 11px; cursor: pointer; min-height: 38px; }
+button:hover { border-color: var(--accent); }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button .sym { font-family: var(--mono); font-weight: 700; margin-right: 4px; color: var(--accent); }
+button.active { background: var(--danger); color: #fff; border-color: var(--danger); }
+#wrap { flex: 1; min-height: 360px; background: var(--panel); border: 1px solid var(--grid); border-radius: 12px; overflow: hidden; position: relative; touch-action: none; }
+svg { display: block; width: 100%; height: 100%; }
+.node-body { fill: var(--panel); stroke: var(--line); stroke-width: 2.5; }
+.lbl { font: 700 22px var(--mono); fill: var(--fg); text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+.small { font: 600 14px var(--font); fill: var(--muted); text-anchor: middle; pointer-events: none; }
+.pin { fill: var(--panel); stroke: var(--line); stroke-width: 2; cursor: crosshair; }
+.pin.hot { fill: var(--accent); }
+.pin.on { fill: var(--on); }
+.wire { fill: none; stroke: var(--off); stroke-width: 4; stroke-linecap: round; }
+.wire.on { stroke: var(--on); }
+.wire-hit { fill: none; stroke: transparent; stroke-width: 18; }
+.ghost { fill: none; stroke: var(--accent); stroke-width: 3; stroke-dasharray: 6 6; pointer-events: none; }
+footer { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; justify-content: space-between; }
+#readout { font: 700 18px var(--mono); }
+#readout .d { color: var(--muted); font-weight: 500; }
+.legend { font-size: 13px; color: var(--muted); }
+.dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; vertical-align: -1px; margin: 0 4px 0 10px; }
+[hidden] { display: none !important; }
+button.cur { background: var(--accent); border-color: var(--accent); color: var(--panel); }
+button.cur .sym { color: var(--panel); }
+.sel { fill: var(--accent); fill-opacity: .14; stroke: var(--accent); stroke-width: 3; }
+.sel.wiring { stroke-dasharray: 8 6; fill-opacity: .08; }
+#name:not(:disabled) { border-color: var(--accent); }
+.tabs { display: flex; gap: 6px; margin-left: auto; }
+.tab { min-height: 34px; padding: 5px 12px; }
+.tab.on { background: var(--accent); border-color: var(--accent); color: var(--panel); }
+#glossar { flex: 1; overflow-y: auto; }
+.gl-intro { margin: 0 0 10px; color: var(--muted); max-width: 70ch; }
+.gl-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+.gl-grid article { background: var(--panel); border: 1px solid var(--grid); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; min-width: 0; -webkit-user-select: text; user-select: text; }
+.gl-grid h3 { margin: 0; font-size: 16px; }
+.gl-grid p { margin: 0; line-height: 1.45; font-size: 14px; }
+.gl-grid button { align-self: flex-start; margin-top: auto; }
+.m { font-family: var(--mono); font-weight: 700; color: var(--accent); }
+@media (max-width: 520px) { h1 { font-size: 19px; } button { padding: 6px 9px; } }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<header>
+  <h1>Logik-Werkbank <span>0 1</span></h1>
+  <div class="tabs"><button id="tab-bank" class="tab on">Werkbank</button><button id="tab-gl" class="tab">Begriffe</button></div>
+  <div class="hint" id="hint">Tippe auf einen Schalter, um ihn umzulegen. Verbinden: erst auf einen Ausgang (rechts) tippen, dann auf einen Eingang (links).</div>
+</header>
+
+<div class="bar">
+  <div class="group"><b>Bauteile</b>
+    <button id="add-in" data-add="IN"><span class="sym">⏻</span>Schalter</button>
+    <button id="add-out" data-add="OUT"><span class="sym">◉</span>Lampe</button>
+    <button id="add-and" data-add="AND"><span class="sym">&amp;</span>UND</button>
+    <button id="add-or" data-add="OR"><span class="sym">≥1</span>ODER</button>
+    <button id="add-xor" data-add="XOR"><span class="sym">=1</span>XOR</button>
+    <button id="add-not" data-add="NOT"><span class="sym">1</span>NICHT</button>
+  </div>
+  <div class="group"><b>Beispiele</b>
+    <button id="ex-ha" data-ex="ha">Halbaddierer</button>
+    <button id="ex-va" data-ex="va">Volladdierer</button>
+    <button id="ex-2b" data-ex="zwei">2-Bit-Rechner</button>
+  </div>
+  <div class="group"><b>Werkzeug</b>
+    <button id="del">Löschen</button>
+    <button id="clear">Alles leeren</button>
+    <label for="name" style="font-size:13px;color:var(--muted)">Name</label><input id="name" disabled placeholder="erst Bauteil antippen" style="font:600 14px var(--font);width:9em;padding:7px 8px;border:1.5px solid var(--grid);border-radius:8px;background:var(--bg);color:var(--fg)">
+  </div>
+</div>
+
+<section id="glossar" hidden>
+  <p class="gl-intro">Die wichtigsten Begriffe zu Logikschaltungen. Mit „Ausprobieren“ öffnet sich das passende Beispiel in der Werkbank.</p>
+  <div class="gl-grid">
+    <article><h3>Bit</h3><p>Die kleinste Informationseinheit. Ein Bit kann nur zwei Werte haben: <b>0</b> (aus, kein Strom) oder <b>1</b> (an, Strom fließt). In der Werkbank zeigt eine orange Leitung eine 1.</p></article>
+    <article><h3>Zweiersystem (Binärsystem)</h3><p>Zahlen werden nur mit 0 und 1 geschrieben. Jede Stelle ist doppelt so viel wert wie die rechts daneben: Einer, Zweier, Vierer … Beispiel: <span class="m">110</span> = 1·4 + 1·2 + 0·1 = 6.</p></article>
+    <article><h3>Gatter</h3><p>Ein Baustein, der aus einem oder zwei Eingangssignalen nach einer festen Regel ein Ausgangssignal macht. Gatter sind die Grundbausteine jedes Computers. Im Chip bestehen sie aus Transistoren.</p></article>
+    <article><h3>Schaltzeichen</h3><p>Gatter werden als Kästchen mit einem Zeichen dargestellt: <span class="m">&amp;</span> UND, <span class="m">≥1</span> ODER, <span class="m">=1</span> XOR, <span class="m">1</span> mit Kreis NICHT. Eingänge links, Ausgang rechts.</p></article>
+    <article><h3>UND-Gatter <span class="m">&amp;</span></h3><p>Ausgang 1 nur, wenn <b>beide</b> Eingänge 1 sind. Wie eine Reihenschaltung zweier Schalter (Station 1, Raketenstart).</p></article>
+    <article><h3>ODER-Gatter <span class="m">≥1</span></h3><p>Ausgang 1, wenn <b>mindestens ein</b> Eingang 1 ist. Wie eine Parallelschaltung (Station 2, Haustürklingel).</p></article>
+    <article><h3>NICHT-Gatter <span class="m">1</span></h3><p>Kehrt das Signal um: aus 0 wird 1, aus 1 wird 0. Wie das Kühlschranklicht (Station 3).</p></article>
+    <article><h3>XOR-Gatter <span class="m">=1</span></h3><p>„Entweder-oder“: Ausgang 1, wenn die Eingänge <b>verschieden</b> sind. Bei 1 und 1 ist er 0. Wie das Treppenhauslicht (Station 4).</p></article>
+    <article><h3>Wahrheitstabelle</h3><p>Eine Tabelle, die für jede mögliche Kombination der Eingänge den Ausgang angibt. Bei zwei Eingängen sind es 4 Zeilen, bei drei Eingängen 8 Zeilen.</p></article>
+    <article><h3>Übertrag</h3><p>Wird eine Stelle zu groß, wandert eine 1 in die nächste Stelle, wie beim schriftlichen Addieren. Im Zweiersystem: 1 + 1 = <span class="m">10</span>, also Summe 0 und Übertrag 1.</p></article>
+    <article><h3>Halbaddierer</h3><p>Addiert zwei einzelne Bits A und B. Er besteht aus einem <b>XOR</b> (liefert die Summe) und einem <b>UND</b> (liefert den Übertrag). „Halb“, weil er keinen Übertrag von einer vorherigen Stelle annehmen kann.</p><button data-try="ha">Ausprobieren</button></article>
+    <article><h3>Volladdierer</h3><p>Addiert drei Bits: A, B und den Übertrag aus der Stelle davor. Er besteht aus <b>zwei Halbaddierern und einem ODER-Gatter</b>. Mit ihm lassen sich Stellen hintereinanderschalten.</p><button data-try="va">Ausprobieren</button></article>
+    <article><h3>Zwei-Bit-Rechner</h3><p>Addiert zwei zweistellige Binärzahlen. Die Einerstelle rechnet ein Halbaddierer, die Zweierstelle ein Volladdierer. Das Ergebnis hat drei Stellen, maximal <span class="m">11 + 11 = 110</span> (3 + 3 = 6).</p><button data-try="zwei">Ausprobieren</button></article>
+    <article><h3>Transistor</h3><p>Ein elektronischer Schalter ohne bewegliche Teile, der von einem anderen Signal geschaltet wird. Ein Handy-Prozessor enthält Milliarden davon. Aus wenigen Transistoren baut man ein Gatter.</p></article>
+  </div>
+</section>
+
+<div id="wrap"><svg id="svg" viewBox="0 0 1000 600" preserveAspectRatio="xMidYMid meet"></svg></div>
+
+<footer>
+  <div id="readout"></div>
+  <div class="legend"><span class="dot" style="background:var(--on)"></span>Signal 1 <span class="dot" style="background:var(--off)"></span>Signal 0 · Lampen, deren Name mit S beginnt (S₀, S₁, S₂), ergeben die Ergebniszahl. Tipp: S0, S1, S2 schreiben.</div>
+</footer>
+
+<script>
+(() => {
+const svg = document.getElementById('svg');
+const NS = 'http://www.w3.org/2000/svg';
+const TYPES = {
+  IN:  { w: 64, h: 46, ins: 0 },
+  OUT: { w: 52, h: 52, ins: 1 },
+  AND: { w: 70, h: 70, ins: 2, sym: '&', f: (a, b) => a & b },
+  OR:  { w: 70, h: 70, ins: 2, sym: '≥1', f: (a, b) => a | b },
+  XOR: { w: 70, h: 70, ins: 2, sym: '=1', f: (a, b) => a ^ b },
+  NOT: { w: 70, h: 70, ins: 1, sym: '1', f: a => 1 - a },
+};
+let nodes = [], wires = [], nextId = 1, pending = null, delMode = false, ghostTo = null, selected = null, currentEx = null;
+function updateButtons() {
+  document.querySelectorAll('[data-add]').forEach(b => b.classList.toggle('cur', !!selected && selected.type === b.dataset.add));
+  document.querySelectorAll('[data-ex]').forEach(b => b.classList.toggle('cur', currentEx === b.dataset.ex));
+}
+let counters = { IN: 0, OUT: 0 };
+
+function node(type, x, y, label, val = 0) {
+  const n = { id: nextId++, type, x, y, label: label || '', val, out: 0 };
+  if (!label && type === 'IN') n.label = String.fromCharCode(65 + (counters.IN++ % 26));
+  if (!label && type === 'OUT') n.label = 'L' + (++counters.OUT);
+  nodes.push(n); return n;
+}
+const byId = id => nodes.find(n => n.id === id);
+function inPin(n, i) { const t = TYPES[n.type]; const y = t.ins === 1 ? t.h / 2 : (i === 0 ? t.h * 0.28 : t.h * 0.72); return { x: n.x, y: n.y + y }; }
+function outPin(n) { const t = TYPES[n.type]; return { x: n.x + t.w, y: n.y + t.h / 2 }; }
+function connect(a, b, pin) { wires = wires.filter(w => !(w.to === b.id && w.pin === pin)); wires.push({ from: a.id, to: b.id, pin }); }
+
+function simulate() {
+  nodes.forEach(n => { if (n.type === 'IN') n.out = n.val; });
+  for (let k = 0; k < 40; k++) {
+    let changed = false;
+    nodes.forEach(n => {
+      if (n.type === 'IN') return;
+      const t = TYPES[n.type]; const v = [];
+      for (let i = 0; i < t.ins; i++) { const w = wires.find(w => w.to === n.id && w.pin === i); v.push(w && byId(w.from) ? byId(w.from).out : 0); }
+      const o = n.type === 'OUT' ? v[0] : t.f(...v);
+      if (o !== n.out) { n.out = o; changed = true; }
+    });
+    if (!changed) break;
+  }
+}
+
+function el(tag, attrs, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+function path(p, q) { const dx = Math.max(40, Math.abs(q.x - p.x) / 2); return `M${p.x},${p.y} C${p.x + dx},${p.y} ${q.x - dx},${q.y} ${q.x},${q.y}`; }
+
+function render() {
+  simulate();
+  svg.innerHTML = '';
+  const defs = el('defs', {}, svg);
+  const pat = el('pattern', { id: 'g', width: 20, height: 20, patternUnits: 'userSpaceOnUse' }, defs);
+  el('circle', { cx: 1, cy: 1, r: 1.2, fill: 'var(--grid)' }, pat);
+  el('rect', { x: -2000, y: -2000, width: 6000, height: 6000, fill: 'url(#g)', 'data-bg': 1 }, svg);
+  wires.forEach((w, i) => {
+    const a = byId(w.from), b = byId(w.to); if (!a || !b) return;
+    const d = path(outPin(a), inPin(b, w.pin));
+    el('path', { d, class: 'wire' + (a.out ? ' on' : '') }, svg);
+    el('path', { d, class: 'wire-hit', 'data-wire': i }, svg);
+  });
+  if (pending && ghostTo) el('path', { d: path(outPin(byId(pending)), ghostTo), class: 'ghost' }, svg);
+  nodes.forEach(n => {
+    const t = TYPES[n.type]; const g = el('g', { 'data-node': n.id, style: 'cursor:grab' }, svg);
+    if (selected === n || pending === n.id) { const extra = n.type === 'NOT' ? 14 : 0; const top = (n.type === 'OUT') ? 10 : 30;
+      el('rect', { x: n.x - 14, y: n.y - top, width: t.w + 28 + extra, height: t.h + top + (n.type === 'OUT' ? 34 : 14), rx: 14, class: pending === n.id ? 'sel wiring' : 'sel' }, g); }
+    if (n.type === 'IN') {
+      el('rect', { x: n.x, y: n.y, width: t.w, height: t.h, rx: 10, class: 'node-body', style: n.val ? 'fill:var(--on);stroke:var(--line)' : '' }, g);
+      el('text', { x: n.x + t.w / 2, y: n.y + t.h / 2, class: 'lbl', style: 'font-size:20px' }, g).textContent = n.val ? '1' : '0';
+      el('text', { x: n.x + t.w / 2, y: n.y - 10, class: 'small' }, g).textContent = n.label;
+    } else if (n.type === 'OUT') {
+      const cx = n.x + t.w / 2, cy = n.y + t.h / 2;
+      if (n.out) el('circle', { cx, cy, r: 34, fill: 'var(--onglow)', opacity: .45 }, g);
+      el('circle', { cx, cy, r: 24, class: 'node-body', style: n.out ? 'fill:var(--on)' : '' }, g);
+      const k = 15; el('path', { d: `M${cx - k},${cy - k} L${cx + k},${cy + k} M${cx - k},${cy + k} L${cx + k},${cy - k}`, stroke: 'var(--line)', 'stroke-width': 2.5 }, g);
+      el('text', { x: cx, y: n.y + t.h + 20, class: 'small', style: 'font-weight:700;fill:var(--fg)' }, g).textContent = n.label;
+    } else {
+      el('rect', { x: n.x, y: n.y, width: t.w, height: t.h, rx: 4, class: 'node-body' }, g);
+      el('text', { x: n.x + t.w / 2, y: n.y + t.h / 2, class: 'lbl' }, g).textContent = t.sym;
+      if (n.type === 'NOT') el('circle', { cx: n.x + t.w + 7, cy: n.y + t.h / 2, r: 6, class: 'node-body', 'stroke-width': 2 }, g);
+      if (n.label) el('text', { x: n.x + t.w / 2, y: n.y - 8, class: 'small' }, g).textContent = n.label;
+    }
+    for (let i = 0; i < t.ins; i++) { const p = inPin(n, i); el('circle', { cx: p.x, cy: p.y, r: 9, class: 'pin', 'data-in': n.id + ':' + i }, svg); }
+    if (n.type !== 'OUT') { const p = outPin(n); const off = n.type === 'NOT' ? 14 : 0;
+      el('circle', { cx: p.x + off, cy: p.y, r: 9, class: 'pin' + (pending === n.id ? ' hot' : n.out ? ' on' : ''), 'data-out': n.id }, svg); }
+  });
+  readout();
+  updateButtons();
+}
+
+function readout() {
+  const s = nodes.filter(n => n.type === 'OUT' && /^S/i.test(n.label)).sort((a, b) => b.label.localeCompare(a.label, 'de', { numeric: true }));
+  const r = document.getElementById('readout');
+  if (!s.length) { r.innerHTML = '<span class="d">Benenne Lampen mit S₀, S₁, … für die Ergebniszahl</span>'; return; }
+  const bits = s.map(n => n.out).join('');
+  r.innerHTML = `Ergebnis ${s.map(n => n.label).join(' ')}: ${bits} <span class="d">= ${parseInt(bits, 2)}</span>`;
+}
+
+function pt(ev) { const p = svg.createSVGPoint(); p.x = ev.clientX; p.y = ev.clientY; return p.matrixTransform(svg.getScreenCTM().inverse()); }
+
+let drag = null;
+svg.addEventListener('pointerdown', ev => {
+  const t = ev.target;
+  if (t.dataset.out) { const id = +t.dataset.out; if (delMode) return; pending = pending === id ? null : id; ghostTo = pt(ev); render(); return; }
+  if (t.dataset.in) { const [id, pin] = t.dataset.in.split(':').map(Number);
+    if (delMode) { wires = wires.filter(w => !(w.to === id && w.pin === pin)); render(); return; }
+    if (pending && pending !== id) { connect(byId(pending), byId(id), pin); pending = null; ghostTo = null; render(); } return; }
+  if (t.dataset.wire !== undefined) { if (delMode) { wires.splice(+t.dataset.wire, 1); render(); } return; }
+  const g = t.closest('[data-node]');
+  if (g) { const n = byId(+g.dataset.node);
+    if (delMode) { if (selected === n) select(null); nodes = nodes.filter(x => x !== n); wires = wires.filter(w => w.from !== n.id && w.to !== n.id); render(); return; }
+    const p = pt(ev); drag = { n, dx: p.x - n.x, dy: p.y - n.y, sx: p.x, sy: p.y, moved: false };
+    svg.setPointerCapture(ev.pointerId); return; }
+  pending = null; ghostTo = null; select(null); render();
+});
+svg.addEventListener('pointermove', ev => {
+  if (drag) { const p = pt(ev); if (Math.hypot(p.x - drag.sx, p.y - drag.sy) > 6) drag.moved = true;
+    if (drag.moved) { drag.n.x = Math.round((p.x - drag.dx) / 10) * 10; drag.n.y = Math.round((p.y - drag.dy) / 10) * 10; render(); } return; }
+  if (pending) { ghostTo = pt(ev); let gp = svg.querySelector('.ghost');
+    if (!gp) { gp = el('path', { class: 'ghost' }); svg.insertBefore(gp, svg.querySelector('[data-node]')); }
+    gp.setAttribute('d', path(outPin(byId(pending)), ghostTo)); }
+});
+svg.addEventListener('pointerup', ev => {
+  if (drag) { if (!drag.moved) { if (drag.n.type === 'IN') drag.n.val = 1 - drag.n.val; select(drag.n); render(); } drag = null; return; }
+  if (pending) { const t = document.elementFromPoint(ev.clientX, ev.clientY);
+    if (t && t.dataset && t.dataset.in) { const [id, pin] = t.dataset.in.split(':').map(Number); if (id !== pending) { connect(byId(pending), byId(id), pin); pending = null; ghostTo = null; render(); } } }
+});
+const nameBox = document.getElementById('name');
+function select(n) { selected = n; nameBox.disabled = !n; nameBox.value = n ? n.label : ''; nameBox.placeholder = n ? '' : 'erst Bauteil antippen'; }
+nameBox.addEventListener('input', () => { if (selected) { selected.label = nameBox.value; render(); } });
+
+let addCount = 0;
+document.querySelectorAll('[data-add]').forEach(b => b.addEventListener('click', () => {
+  const T = TYPES[b.dataset.add]; let pos = null;
+  for (let y = 40; y <= 500 && !pos; y += 50) for (let x = 140; x <= 860 && !pos; x += 50) {
+    const free = nodes.every(o => { const u = TYPES[o.type]; return x + T.w + 40 < o.x || x > o.x + u.w + 40 || y + T.h + 40 < o.y || y > o.y + u.h + 40; });
+    if (free) pos = { x, y }; }
+  if (!pos) { const k = addCount++ % 8; pos = { x: 120 + k * 90, y: 80 + (k % 4) * 110 }; }
+  const n = node(b.dataset.add, pos.x, pos.y); select(n); render();
+}));
+document.getElementById('del').addEventListener('click', e => { delMode = !delMode; pending = null; e.currentTarget.classList.toggle('active', delMode);
+  document.getElementById('hint').textContent = delMode ? 'Löschmodus: Tippe auf ein Bauteil oder eine Leitung, um es zu entfernen. Nochmals „Löschen“ beendet den Modus.' : 'Tippe auf einen Schalter, um ihn umzulegen. Verbinden: erst auf einen Ausgang (rechts) tippen, dann auf einen Eingang (links).'; render(); });
+document.getElementById('clear').addEventListener('click', () => { nodes = []; wires = []; counters = { IN: 0, OUT: 0 }; pending = null; select(null); currentEx = null; render(); });
+
+const EX = {
+  ha() { const A = node('IN', 60, 150, 'A'), B = node('IN', 60, 350, 'B');
+    const x = node('XOR', 400, 120, 'XOR'), a = node('AND', 400, 330, 'UND');
+    const S = node('OUT', 720, 129, 'S₀'), U = node('OUT', 720, 339, 'S₁ (Übertrag)');
+    connect(A, x, 0); connect(B, x, 1); connect(A, a, 0); connect(B, a, 1); connect(x, S, 0); connect(a, U, 0); },
+  va() { const A = node('IN', 40, 90, 'A'), B = node('IN', 40, 200, 'B'), C = node('IN', 40, 400, 'Ü ein');
+    const x1 = node('XOR', 230, 100, 'HA 1'), a1 = node('AND', 230, 250, 'HA 1'), x2 = node('XOR', 470, 160, 'HA 2'), a2 = node('AND', 470, 330, 'HA 2'), o = node('OR', 690, 300);
+    const S = node('OUT', 880, 169, 'S₀'), U = node('OUT', 880, 309, 'S₁ (Ü aus)');
+    connect(A, x1, 0); connect(B, x1, 1); connect(A, a1, 0); connect(B, a1, 1);
+    connect(x1, x2, 0); connect(C, x2, 1); connect(x1, a2, 0); connect(C, a2, 1);
+    connect(a1, o, 0); connect(a2, o, 1); connect(x2, S, 0); connect(o, U, 0); },
+  zwei() { const A1 = node('IN', 30, 50, 'A₁'), B1 = node('IN', 30, 150, 'B₁'), A0 = node('IN', 30, 330, 'A₀'), B0 = node('IN', 30, 430, 'B₀');
+    const g3 = node('XOR', 220, 40, 'G3'), g4 = node('AND', 220, 160, 'G4'), g1 = node('XOR', 220, 330, 'G1'), g2 = node('AND', 220, 450, 'G2');
+    const g5 = node('XOR', 470, 110, 'G5'), g6 = node('AND', 470, 250, 'G6'), g7 = node('OR', 690, 200, 'G7');
+    const S2 = node('OUT', 890, 209, 'S₂'), S1 = node('OUT', 890, 99, 'S₁'), S0 = node('OUT', 890, 339, 'S₀');
+    connect(A1, g3, 0); connect(B1, g3, 1); connect(A1, g4, 0); connect(B1, g4, 1);
+    connect(A0, g1, 0); connect(B0, g1, 1); connect(A0, g2, 0); connect(B0, g2, 1);
+    connect(g3, g5, 0); connect(g2, g5, 1); connect(g3, g6, 0); connect(g2, g6, 1);
+    connect(g4, g7, 0); connect(g6, g7, 1); connect(g5, S1, 0); connect(g7, S2, 0); connect(g1, S0, 0);
+    A1.val = 1; B1.val = 1; A0.val = 1; B0.val = 1; },
+};
+document.querySelectorAll('[data-ex]').forEach(b => b.addEventListener('click', () => { nodes = []; wires = []; counters = { IN: 0, OUT: 0 }; pending = null; select(null); currentEx = b.dataset.ex; EX[b.dataset.ex](); render(); }));
+
+const views = { bank: [document.querySelector('.bar'), document.getElementById('wrap'), document.querySelector('footer'), document.getElementById('hint')], gl: [document.getElementById('glossar')] };
+function show(v) { views.bank.forEach(e => e.hidden = v !== 'bank'); views.gl.forEach(e => e.hidden = v !== 'gl');
+  document.getElementById('tab-bank').classList.toggle('on', v === 'bank'); document.getElementById('tab-gl').classList.toggle('on', v === 'gl'); if (v === 'bank') render(); }
+document.getElementById('tab-bank').addEventListener('click', () => show('bank'));
+document.getElementById('tab-gl').addEventListener('click', () => show('gl'));
+document.querySelectorAll('[data-try]').forEach(b => b.addEventListener('click', () => { nodes = []; wires = []; counters = { IN: 0, OUT: 0 }; pending = null; select(null); currentEx = b.dataset.try; EX[b.dataset.try](); show('bank'); }));
+currentEx = 'zwei'; EX.zwei(); render();
+})();
+</script>
+</body></html>
